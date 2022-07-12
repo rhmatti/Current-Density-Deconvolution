@@ -1,1 +1,1 @@
-# Current-Density-Deconvolution
+# Current Density Deconvolution
