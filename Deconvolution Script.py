@@ -57,18 +57,35 @@ def processData(dataList):
     XV = np.array(XV)
     YV = np.array(YV)
     return XV, YV, I
-
+'''
 #Returns the location of all peaks (since my data was collected in pulsed mode)
 def findPeaks(x, y, z, Vmax, Vstep):
     peaks = np.zeros((int(2*Vmax/Vstep+1), int(2*Vmax/Vstep+1)))
-    for i in range(-Vmax,Vmax+Vstep, Vstep):
+    for i in range(0,Vmax+Vstep, Vstep):
         x_matches = np.where(x == i)[0]
         y1 = y[x_matches]
         z1 = z[x_matches]
-        for j in range(-Vmax,Vmax+Vstep, Vstep):
+        for j in range(-14,Vmax+Vstep, Vstep):
             y_matches = np.where(y1 == j)[0]
             z2 = z1[y_matches]
-            peaks[int((i+Vmax-2)/Vstep),int((j+Vmax-2)/Vstep)] = np.amax(z2)
+            peaks[int(2*Vmax/Vstep+1)-int((j+Vmax-2)/Vstep),int((i+Vmax-2)/Vstep)] = np.amax(z2)
+    return peaks
+'''
+#Returns the location of all peaks (since my data was collected in pulsed mode)
+def findPeaks(x, y, z, Vmax, Vstep):
+    Vx_min = int(np.amin(x))
+    Vx_max = int(np.amax(x))
+    Vy_min = int(np.amin(y))
+    Vy_max = int(np.amax(y))
+    peaks = np.zeros((int((Vy_max-Vy_min)/Vstep+1),int((Vx_max-Vx_min)/Vstep+1)))
+    for i in range(Vx_min, Vx_max, Vstep):
+        x_matches = np.where(x == i)[0]
+        y1 = y[x_matches]
+        z1 = z[x_matches]
+        for j in range(Vy_min, Vy_max, Vstep):
+            y_matches = np.where(y1 == j)[0]
+            z2 = z1[y_matches]
+            peaks[int((j-Vy_min)/Vstep),int((i-Vx_min)/Vstep)] = np.amax(z2)
     return peaks
 
 #Returns two arrays representing x and y slices at the coordinates of the maximum value of z
@@ -76,6 +93,8 @@ def findCenterSlices(x, y, z):
     imax = np.argmax(z)
     xc = x[imax]
     yc = y[imax]
+    #xc = 0
+    #yc = 0
     print(f'Maximum located at: ({xc},{yc})')
     xslice = []
     yslice = []
@@ -90,13 +109,13 @@ def findCenterSlices(x, y, z):
 
 #Converts deflector voltage difference to deflection in mm
 def convertVtoD(Voltages):
-    q = 6*1.6*pow(10,-19)
-    m = 16*1.66*pow(10,-27)
+    q = 8*1.6*pow(10,-19)
+    m = 20*1.66*pow(10,-27)
     d = 0.0254
     dy1 = 0.0254
     dy2 = 0.4826
     r = 0.35
-    B = 35.7*pow(10,-3)
+    B = 37.25*pow(10,-3)
     viy = q*B*r/m
     a = Voltages*q/(m*d)
     dx1 = 0.5*a*pow(dy1/viy,2)
@@ -149,7 +168,7 @@ def saveData(matrix, spacing, fileName):
 
 #Displays an N x M matrix as an image with N x M pixels
 def showMatrix(matrix, title=None):
-    plt.imshow(matrix, interpolation = 'gaussian', cmap = 'inferno')
+    plt.imshow(matrix, interpolation = 'gaussian', cmap = 'inferno', origin = 'lower')
     plt.colorbar()
     if title != None:
         plt.title(title)
@@ -162,22 +181,24 @@ def getDim(matrix):
     return rows, columns
 
 #Centers matrix's maximum value in the center of a larger matrix of zeros of size "size"
-def padnCenter(matrix, size):
-    xdim = matrix.shape[0]
-    ydim = matrix.shape[1]
+def padnCenter(matrix):
+    ydim = matrix.shape[0]
+    xdim = matrix.shape[1]
+    size = 2*max([xdim, ydim])+1
     max_tuple = np.where(matrix == np.amax(matrix))
-    xmax, ymax = list(zip(max_tuple[0], max_tuple[1]))[0]
+    ymax, xmax = list(zip(max_tuple[0], max_tuple[1]))[0]
+    print(f'x={xmax}, y={ymax}')
     xshift = size/2-xmax
     yshift = size/2-ymax
     padded = np.zeros((size, size))
-    i = xshift
-    while i < (size-(xdim-xshift)):
-        j = yshift
-        while j < (size-(ydim-yshift)):
-            padded[int(i),int(j)] = matrix[int(i-xshift), int(j-yshift)]
+    i = 0
+    while i < xdim:
+        j = 0
+        while j < ydim:
+            padded[int(j+yshift), int(i+xshift)] = matrix[int(j), int(i)]
             j = j + 1
         i = i + 1
-    return padded
+    return padded, size
 
 #Shifts a matrix to the center from the origin
 def shifttoc(matrix):
@@ -232,26 +253,24 @@ class Deconvolution:
         self.N = None
         self.spacing = None
         self.Rsample = None
-        self.Nint = None
         self.th = None
         self.energy = None
-        self.npoints = None
         self.delta = None
         self.R = None
 
     def calcDk(self, filename):
         #Creates a file for the detector function in Fourier space
         file = open(filename, "w")
-        file.write(f'{self.npoints} {self.npoints}\n')
+        file.write(f'{self.N} {self.N}\n')
 
-        kk = -(self.npoints/2)
+        kk = -(self.N/2)
         #Calculates Dk = 2 * J1(k*R)/(k*R) and writes to file
-        while kk < (self.npoints/2):
-            kx = 2*np.pi/(self.npoints*self.delta)*kk
+        while kk < (self.N/2):
+            kx = 2*np.pi/(self.N*self.delta)*kk
 
-            jj = -(self.npoints/2)
-            while jj < (self.npoints/2):
-                ky = 2*np.pi/(self.npoints*self.delta)*jj
+            jj = -(self.N/2)
+            while jj < (self.N/2):
+                ky = 2*np.pi/(self.N*self.delta)*jj
                 kmag = self.R*np.sqrt(kx*kx + ky*ky)
                 self.Dk = 2*spec.jv(1,kmag)/kmag
                 file.write(f'{round(self.Dk,7)} ')
@@ -265,7 +284,7 @@ class Deconvolution:
     #Calculates a matrix representation of the cross section of the detector as seen by the ion beam
     #at a given angle of incidence, theta
     def calcth(self):
-        Ncenter = np.ceil((self.Nint+1)/2)
+        Ncenter = np.ceil((self.N+1)/2)
         thetar = self.theta*np.pi/180
         fx = 1/pow(np.cos(thetar),2)
         print(f'cos({self.theta}) = {np.cos(thetar)}')
@@ -273,10 +292,10 @@ class Deconvolution:
 
         lim2 = pow((self.Rsample/self.spacing),2)
 
-        self.th = np.zeros((self.Nint,self.Nint))
+        self.th = np.zeros((self.N,self.N))
 
-        for i in range(1,self.Nint):
-            for j in range(1,self.Nint):
+        for i in range(1,self.N):
+            for j in range(1,self.N):
                 if pow((i-Ncenter),2) + fx*pow((j-Ncenter),2) <= lim2:
                     self.th[i-1,j-1]=1
 
@@ -288,7 +307,7 @@ class Deconvolution:
         a = Ikc2.shape[0]
         b = Ikc2.shape[1]
 
-        [X, Y] = np.meshgrid(np.arange(b) - np.ceil((self.Nint+1)/2), np.arange(a) - np.ceil((self.Nint+1)/2))
+        [X, Y] = np.meshgrid(np.arange(b) - np.ceil((self.N+1)/2), np.arange(a) - np.ceil((self.N+1)/2))
         R = np.sqrt(np.square(X) + np.square(Y))
         rad = np.arange(0, np.max(R), 1)
         
@@ -408,7 +427,7 @@ class Deconvolution:
     def calcresi(self):
         results = open('results.txt', 'a')
         results.write(f'{self.energy}\t{self.theta}\t{self.N}\t{self.wien}\t{self.eta}\t{self.scale}\t{self.sigk}\
-            \t{self.Nint}\t{self.intJ}\t{self.intJ2}\t{self.ratio}\n')
+            \t{self.N}\t{self.intJ}\t{self.intJ2}\t{self.ratio}\n')
         results.close()
 
 
@@ -453,37 +472,18 @@ class Deconvolution:
             c_valueJc = self.Jc[Nhalf,Nhalf]*self.mu
             average_20mils = 0.25*(self.Jc[Nhalf-4,Nhalf]+self.Jc[Nhalf+4,Nhalf]+self.Jc[Nhalf,Nhalf-4]+self.Jc[Nhalf,Nhalf+4])
 
-
+print(f'X Deflection: {convertVtoD(2)}')
 #Creates an instance of the Deconvolution class
 dec = Deconvolution()
 
 #Need to define variables for inputs to the code
 dec.energy = 4500  #energy of the ion beam
-dec.npoints =129   #number of points per side
 dec.Rsample = convertVtoD(128)      #Radius of the matrix (basically half of the width of the data matrix) in mm
 dec.spacing = convertVtoD(4)        #Physical spacing between points in the matrix in mm
 print(f'Rsample={dec.Rsample}')
 print(f'spacing={dec.spacing}')
-dec.theta = 0
-dec.N = dec.npoints
-dec.Nint = dec.N
-dec.th = dec.calcth()
-dec.R = 3       #radius of aperture in mm
-dec.delta = 0.351   #Point spacing in mm
-
-#Generates the detector function file and saves it as fileName
-fileName = 'Dk_test4.txt'
-dec.calcDk(fileName)
-
-#Reads in the detector function file as a matrix
-dec.Dkc = processList(readFileToList(fileName),1,0)
-dec.Dkc = np.array(dec.Dkc)
-dec.Dk = shiftfrc(dec.Dkc)
-print(f'Dk matrix is {dec.Dk.shape}')
-max_tuple = np.where(dec.Dk == np.amax(dec.Dk))
-ListofCoordinates = list(zip(max_tuple[0], max_tuple[1]))
-for coord in ListofCoordinates:
-    print(f'Maximum at {coord}')
+dec.R = 0.5       #radius of aperture in mm
+dec.delta = 0.15   #Point spacing in mm
 
 
 #These four lines are inporting and processing the 4 different data files I took
@@ -501,12 +501,30 @@ YV = np.concatenate((YV1, -YV2, YV3, -YV4))
 I = np.concatenate((I1, I2, I3, I4))
 
 
-#Finding just the current peaks (since the data was pulsed) and returning as a 64x64 matrix
-peak_matrix = findPeaks(XV, YV, I, 64, 2)
+#Finding just the current peaks (since the data was pulsed) and returning as a 20x40 matrix
+peak_matrix = findPeaks(XV, YV, I, 40, 2)
+showMatrix(peak_matrix)
 
 #Centering the largest value of the 64x64 matrix in a larger 129x129 matrix and filling in all empty spaces with zeros
-peak_matrix = padnCenter(peak_matrix, 129)
+peak_matrix, dec.N = padnCenter(peak_matrix)
 showMatrix(peak_matrix)
+
+dec.theta = 0
+dec.th = dec.calcth()
+
+#Generates the detector function file and saves it as fileName
+fileName = 'Dk_test4.txt'
+dec.calcDk(fileName)
+
+#Reads in the detector function file as a matrix
+dec.Dkc = processList(readFileToList(fileName),1,0)
+dec.Dkc = np.array(dec.Dkc)
+dec.Dk = shiftfrc(dec.Dkc)
+print(f'Dk matrix is {dec.Dk.shape}')
+max_tuple = np.where(dec.Dk == np.amax(dec.Dk))
+ListofCoordinates = list(zip(max_tuple[0], max_tuple[1]))
+for coord in ListofCoordinates:
+    print(f'Maximum at {coord}')
 
 print(f'Peak matrix is {peak_matrix.shape}')
 max_tuple = np.where(peak_matrix == np.amax(peak_matrix))
@@ -531,7 +549,7 @@ dec.Ik = fft.fft2(dec.I)
 dec.Ikc = shifttoc(dec.Ik)
 
 
-dec.sig2noise()
+#dec.sig2noise()
 
 #Performs Dahl's method of iterated Wiener Filtering
 dec.wienerFiltering()
@@ -570,6 +588,35 @@ plt.show()
 
 #Saves dec.Jc_arr[0].real as a file to be used for plotting in other software (for me, Mathematica)
 saveData(dec.Jc_arr[0].real, dec.spacing, 'Jc eta=0.01 iterated data')
+
+
+xslice, yslice = findCenterSlices(XV, YV, I)
+x_peak_indices = sig.find_peaks(xslice[:,1])[0]
+y_peak_indices = sig.find_peaks(yslice[:,1])[0]
+
+xoutput = open('x-slice.txt', 'w')
+xoutput.write('X-Voltage\tCurrent (pA)\n')
+for i in range(0, len(x_peak_indices)):
+    xoutput.write(f'{xslice[x_peak_indices[i],0]}\t{xslice[x_peak_indices[i],1]}\n')
+xoutput.close
+
+youtput = open('y-slice.txt', 'w')
+youtput.write('X-Voltage\tCurrent (pA)\n')
+for i in range(0, len(y_peak_indices)):
+    youtput.write(f'{yslice[y_peak_indices[i],0]}\t{yslice[y_peak_indices[i],1]}\n')
+youtput.close()
+
+fig, axis = plt.subplots(1,2)
+#plt.scatter(xslice[:,0], xslice[:,1])
+p1 = axis[0].scatter(xslice[x_peak_indices,0],xslice[x_peak_indices,1])
+axis[0].set_title('X-Slice')
+p2 = axis[1].scatter(yslice[y_peak_indices,0],yslice[y_peak_indices,1])
+axis[1].set_title('Y-Slice')
+plt.show()
+
+plt.scatter(xslice[x_peak_indices,0],xslice[x_peak_indices,1])
+plt.scatter(yslice[y_peak_indices,0],yslice[y_peak_indices,1])
+plt.show()
 
 
 
