@@ -304,29 +304,16 @@ class Deconvolution:
         print(f'{self.intJ}\t{self.intJ2}\tratio={self.ratio}')
 
 
-    def calcresi(self):
-        results = open('results.txt', 'a')
-        results.write(f'{self.energy}\t{self.theta}\t{self.N}\t{self.wien}\t{self.eta}\t{self.scale}\t{self.sigk}\
-            \t{self.N}\t{self.intJ}\t{self.intJ2}\t{self.ratio}\n')
-        results.close()
-
-
     #This is the order of functions that are called repeatedly by wienerFiltering for each value of eta
     def cycle(self):
         self.decon()    #You can also use self.decon2() here
         self.theta = 0
         self.calcth()
         self.calcints()
-        self.calcresi()
     
 
     #This function performs iterated Wiener Filtering according to Dahl's method
     def wienerFiltering(self):
-        results = open('results.txt', 'w')
-        results.write(f'energy\ttheta\tN\twien\teta\tscale\tsigk\
-            \tNint\tintJ\tintJ2\tratio\n')
-        results.close()
-        index = 1
         self.wien = 0
         self.eta = 0.01
         self.scale = 0
