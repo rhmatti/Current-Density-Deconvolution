@@ -3,7 +3,7 @@
 #Author: Richard Mattish
 #Adapted from Eric Dahl's matlab code (DOI: https://doi.org/10.1063/1.1287635)
 
-#Last Updated: 06/18/22
+#Last Updated: 08/03/22
 
 #Function:  This script is used to deconvolve ion beam current data (that was
 #           obtained by rastering the beam across a Faraday cup) from the
@@ -13,10 +13,8 @@
 
 
 #Importing relevant libraries
-from cProfile import label
 import numpy as np
 import numpy.fft as fft
-import scipy.signal as sig
 import scipy.special as spec
 import matplotlib.pyplot as plt
 
@@ -43,87 +41,6 @@ def processList(dataList, i, j):
     for row in range(0, len(dataList2)):
         dataList2[row] = [float(x) for x in dataList2[row]]
     return dataList2
-
-#Takes a matrix and separates columns as distinct numpy arrays
-def processData(dataList):
-    I = []
-    XV = []
-    YV = []
-    for row in dataList:
-        I.append(row[1])
-        XV.append(row[2])
-        YV.append(row[3])
-    I = np.array(I)
-    XV = np.array(XV)
-    YV = np.array(YV)
-    return XV, YV, I
-'''
-#Returns the location of all peaks (since my data was collected in pulsed mode)
-def findPeaks(x, y, z, Vmax, Vstep):
-    peaks = np.zeros((int(2*Vmax/Vstep+1), int(2*Vmax/Vstep+1)))
-    for i in range(0,Vmax+Vstep, Vstep):
-        x_matches = np.where(x == i)[0]
-        y1 = y[x_matches]
-        z1 = z[x_matches]
-        for j in range(-14,Vmax+Vstep, Vstep):
-            y_matches = np.where(y1 == j)[0]
-            z2 = z1[y_matches]
-            peaks[int(2*Vmax/Vstep+1)-int((j+Vmax-2)/Vstep),int((i+Vmax-2)/Vstep)] = np.amax(z2)
-    return peaks
-'''
-#Returns the location of all peaks (since my data was collected in pulsed mode)
-def findPeaks(x, y, z, Vmax, Vstep):
-    Vx_min = int(np.amin(x))
-    Vx_max = int(np.amax(x))
-    Vy_min = int(np.amin(y))
-    Vy_max = int(np.amax(y))
-    peaks = np.zeros((int((Vy_max-Vy_min)/Vstep+1),int((Vx_max-Vx_min)/Vstep+1)))
-    for i in range(Vx_min, Vx_max, Vstep):
-        x_matches = np.where(x == i)[0]
-        y1 = y[x_matches]
-        z1 = z[x_matches]
-        for j in range(Vy_min, Vy_max, Vstep):
-            y_matches = np.where(y1 == j)[0]
-            z2 = z1[y_matches]
-            peaks[int((j-Vy_min)/Vstep),int((i-Vx_min)/Vstep)] = np.amax(z2)
-    return peaks
-
-#Returns two arrays representing x and y slices at the coordinates of the maximum value of z
-def findCenterSlices(x, y, z):
-    imax = np.argmax(z)
-    xc = x[imax]
-    yc = y[imax]
-    #xc = 0
-    #yc = 0
-    print(f'Maximum located at: ({xc},{yc})')
-    xslice = []
-    yslice = []
-    for i in range(0, len(x)):
-        if x[i] == xc:
-            yslice.append([y[i], z[i]])
-        if y[i] == yc:
-            xslice.append([x[i], z[i]])
-    xslice = np.array(xslice)
-    yslice = np.array(yslice)
-    return xslice, yslice
-
-#Converts deflector voltage difference to deflection in mm
-def convertVtoD(Voltages):
-    q = 8*1.6*pow(10,-19)
-    m = 20*1.66*pow(10,-27)
-    d = 0.0254
-    dy1 = 0.0254
-    dy2 = 0.4826
-    r = 0.35
-    B = 37.25*pow(10,-3)
-    viy = q*B*r/m
-    a = Voltages*q/(m*d)
-    dx1 = 0.5*a*pow(dy1/viy,2)
-    vfx = a*dy1/viy
-    dx2 = dx1 + vfx*dy2/viy
-    dx2 = dx2*1000
-    
-    return dx2
 
 
 #Writes a matrix to a text file
@@ -371,43 +288,6 @@ class Deconvolution:
             self.Jkun = self.Jk
             self.Jkcun = shifttoc(self.Jkun)
 
-    #This is an almost one-to-one recreation of Dahl's matlab file "decon2.m"
-    def decon2(self):
-        self.a = np.absolute(self.Dk)
-
-        if self.wien == 1:
-            Nhalf = int(self.N/2)
-            [x,y] = np.meshgrid(np.arange(-Nhalf,Nhalf))
-            #Other stuff goes here
-
-        elif self.wien == 2 or self.wien == -2:
-            self.Jka = pow(abs(self.Jkun),2)
-            self.Jka = self.Jka/np.amax(self.Jka)
-            self.etak = 1/self.Jka
-            self.etakc = shifttoc(self.etak)
-
-        if self.wien >= 0:
-            if self.wien == 0:
-                self.den = self.a*self.a + self.eta
-            elif self.wien > 0:
-                self.den = self.a*self.a + self.scale*self.etak
-            self.Jk = self.Ik*self.Dk
-            self.Jk = self.Jk/self.den
-
-        elif self.wien < 0:
-            if self.wien == -1:
-                self.den = np.sqrt(pow(self.a,2) + self.eta)
-            elif self.wien < -1:
-                self.den = np.sqrt(pow(self.a,2) +self.scale*self.etak)
-        
-        self.Jkc =shifttoc(self.Jk)
-        self.J = fft.ifft2(self.Jk).real
-        self.Jc = shifttoc(self.J)
-
-        if self.wien == 0 or self.wien == -1:
-            self.Jkun = self.Jk
-            self.Jkcun = shifttoc(self.Jkun)
-
     #Calculates integral J, integral J2, and their ratio (intJ2/intJ)
     def calcints(self):
         Jcth = self.th*self.Jc
@@ -467,47 +347,30 @@ class Deconvolution:
             self.Jkc_arr.append(self.Jkc)
             self.Jc_arr.append(self.Jc)
 
-            max_Jc = np.amax(self.Jc)*self.mu
-            Nhalf = int(self.N/2)+1
-            c_valueJc = self.Jc[Nhalf,Nhalf]*self.mu
-            average_20mils = 0.25*(self.Jc[Nhalf-4,Nhalf]+self.Jc[Nhalf+4,Nhalf]+self.Jc[Nhalf,Nhalf-4]+self.Jc[Nhalf,Nhalf+4])
-
-print(f'X Deflection: {convertVtoD(2)}')
 #Creates an instance of the Deconvolution class
 dec = Deconvolution()
 
+
+
+
+#Name of data file to be imported for deconvolution
+dataFile = 'sample_data.txt'
+
 #Need to define variables for inputs to the code
-dec.energy = 4500  #energy of the ion beam
-dec.Rsample = convertVtoD(128)      #Radius of the matrix (basically half of the width of the data matrix) in mm
-dec.spacing = convertVtoD(4)        #Physical spacing between points in the matrix in mm
-print(f'Rsample={dec.Rsample}')
-print(f'spacing={dec.spacing}')
-dec.R = 0.5       #radius of aperture in mm
-dec.delta = 0.15   #Point spacing in mm
+dec.energy = 4500                   #energy of the ion beam
+dec.Rsample = 9.7                   #Radius of the matrix (basically half of the width of the data matrix) in mm
+dec.spacing = 0.3                   #Physical spacing between points in the matrix in mm
+dec.R = 0.5                         #radius of aperture in mm
+dec.delta = 0.15                    #Point spacing in mm
 
 
-#These four lines are inporting and processing the 4 different data files I took
-#Each file represents 1 quadrant of space that I rastered the ion beam over the Faraday cup
-XV1, YV1, I1 = processData(processList(readFileToList('deflector_quad1.log'),1,0))
-XV2, YV2, I2 = processData(processList(readFileToList('deflector_quad2.log'),1,0))
-XV3, YV3, I3 = processData(processList(readFileToList('deflector_quad3.log'),1,0))
-XV4, YV4, I4 = processData(processList(readFileToList('deflector_quad4.log'),1,0))
 
 
-#I am combining the 4 different files into 3 arrays 
-#(X Deflector Voltage, Y Deflector Voltage, and Current)
-XV = np.concatenate((XV1, XV2, -XV3, -XV4))
-YV = np.concatenate((YV1, -YV2, YV3, -YV4))
-I = np.concatenate((I1, I2, I3, I4))
+#Imports the data file as a 2D numpy array
+data_matrix = np.array(processList(readFileToList(dataFile),1,0))
 
-
-#Finding just the current peaks (since the data was pulsed) and returning as a 20x40 matrix
-peak_matrix = findPeaks(XV, YV, I, 40, 2)
-showMatrix(peak_matrix)
-
-#Centering the largest value of the 64x64 matrix in a larger 129x129 matrix and filling in all empty spaces with zeros
-peak_matrix, dec.N = padnCenter(peak_matrix)
-showMatrix(peak_matrix)
+#Centering the largest value of the data matrix in a larger matrix and filling in all empty spaces with zeros
+dec.Ic, dec.N = padnCenter(data_matrix)
 
 dec.theta = 0
 dec.th = dec.calcth()
@@ -520,21 +383,7 @@ dec.calcDk(fileName)
 dec.Dkc = processList(readFileToList(fileName),1,0)
 dec.Dkc = np.array(dec.Dkc)
 dec.Dk = shiftfrc(dec.Dkc)
-print(f'Dk matrix is {dec.Dk.shape}')
-max_tuple = np.where(dec.Dk == np.amax(dec.Dk))
-ListofCoordinates = list(zip(max_tuple[0], max_tuple[1]))
-for coord in ListofCoordinates:
-    print(f'Maximum at {coord}')
 
-print(f'Peak matrix is {peak_matrix.shape}')
-max_tuple = np.where(peak_matrix == np.amax(peak_matrix))
-ListofCoordinates = list(zip(max_tuple[0], max_tuple[1]))
-for coord in ListofCoordinates:
-    print(f'Maximum at {coord}')
-
-#Defines the matrix Ic (aka the peak current matrix that I took experimentally)
-#Basically just renaming it to match the math equations
-dec.Ic = peak_matrix
 
 #Divides Ic by the area of the detector aperture
 dec.Ic = dec.Ic/(np.pi*pow(dec.R,2))
@@ -584,56 +433,3 @@ fig.colorbar(p6, ax=axis[1,2])
 axis[1,2].set_title(f'Jc, iterated, eta={dec.scales[4]}')
 
 plt.show()
-
-
-#Saves dec.Jc_arr[0].real as a file to be used for plotting in other software (for me, Mathematica)
-saveData(dec.Jc_arr[0].real, dec.spacing, 'Jc eta=0.01 iterated data')
-
-
-xslice, yslice = findCenterSlices(XV, YV, I)
-x_peak_indices = sig.find_peaks(xslice[:,1])[0]
-y_peak_indices = sig.find_peaks(yslice[:,1])[0]
-
-xoutput = open('x-slice.txt', 'w')
-xoutput.write('X-Voltage\tCurrent (pA)\n')
-for i in range(0, len(x_peak_indices)):
-    xoutput.write(f'{xslice[x_peak_indices[i],0]}\t{xslice[x_peak_indices[i],1]}\n')
-xoutput.close
-
-youtput = open('y-slice.txt', 'w')
-youtput.write('X-Voltage\tCurrent (pA)\n')
-for i in range(0, len(y_peak_indices)):
-    youtput.write(f'{yslice[y_peak_indices[i],0]}\t{yslice[y_peak_indices[i],1]}\n')
-youtput.close()
-
-fig, axis = plt.subplots(1,2)
-#plt.scatter(xslice[:,0], xslice[:,1])
-p1 = axis[0].scatter(xslice[x_peak_indices,0],xslice[x_peak_indices,1])
-axis[0].set_title('X-Slice')
-p2 = axis[1].scatter(yslice[y_peak_indices,0],yslice[y_peak_indices,1])
-axis[1].set_title('Y-Slice')
-plt.show()
-
-plt.scatter(xslice[x_peak_indices,0],xslice[x_peak_indices,1])
-plt.scatter(yslice[y_peak_indices,0],yslice[y_peak_indices,1])
-plt.show()
-
-
-
-#This creates a plot of the data I took in 3D without deconvolution
-#(so you can see what I actually measured)
-'''
-print(len(I))
-peak_indices = sig.find_peaks(I)[0]
-peak_I = I[peak_indices]
-peak_XV = XV[peak_indices]
-peak_YV = YV[peak_indices]
-print(len(peak_I))
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-ax.scatter(peak_XV, peak_YV, peak_I)
-ax.set_xlabel('X Deflector (V)')
-ax.set_ylabel('Y Deflector (V)')
-ax.set_zlabel('Ion Beam Current (pA)')
-plt.show()
-'''
