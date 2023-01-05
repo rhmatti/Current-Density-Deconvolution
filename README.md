@@ -46,3 +46,5 @@ User Instructions
       
       d. Variable `dec.R`:
       * This is the radius of the detector aperture (for circular aperture detectors)
+      
+3. Run the script
