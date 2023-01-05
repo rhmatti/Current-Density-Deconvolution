@@ -133,12 +133,9 @@ class Deconvolution:
         self.wien = None
         self.scale = None
         self.sigk = None
-        self.theta = None
         self.N = None
         self.spacing = None
         self.Rsample = None
-        self.th = None
-        self.delta = None
         self.R = None
 
     def calcDk(self, filename):
@@ -149,11 +146,11 @@ class Deconvolution:
         kk = -(self.N/2)
         #Calculates Dk = 2 * J1(k*R)/(k*R) and writes to file
         while kk < (self.N/2):
-            kx = 2*np.pi/(self.N*self.delta)*kk
+            kx = 2*np.pi/(self.N*self.spacing)*kk
 
             jj = -(self.N/2)
             while jj < (self.N/2):
-                ky = 2*np.pi/(self.N*self.delta)*jj
+                ky = 2*np.pi/(self.N*self.spacing)*jj
                 kmag = self.R*np.sqrt(kx*kx + ky*ky)
                 self.Dk = 2*spec.jv(1,kmag)/kmag
                 file.write(f'{round(self.Dk,7)} ')
@@ -163,32 +160,14 @@ class Deconvolution:
 
         file.close()
 
-
-    #Calculates a matrix representation of the cross section of the detector as seen by the ion beam
-    #at a given angle of incidence, theta
-    def calcth(self):
-        Ncenter = np.ceil((self.N+1)/2)
-        thetar = self.theta*np.pi/180
-        fx = 1/pow(np.cos(thetar),2)
-        print(f'cos({self.theta}) = {np.cos(thetar)}')
-        print(f'scaling factor = {fx}')
-
-        lim2 = pow((self.Rsample/self.spacing),2)
-
-        self.th = np.zeros((self.N,self.N))
-
-        for i in range(1,self.N):
-            for j in range(1,self.N):
-                if pow((i-Ncenter),2) + fx*pow((j-Ncenter),2) <= lim2:
-                    self.th[i-1,j-1]=1
-
     #Computes the azimuthally-averaged power spectrum (<|I(k)|^2>) and the detector power spectrum (|D(k)|^2)
     def noise2sig(self):
         Ikc2 = pow(np.absolute(self.Ikc),2)
         Dkc2 = pow(np.absolute(self.Dkc),2)
 
-        a = Ikc2.shape[0]
-        b = Ikc2.shape[1]
+        a = int(Ikc2.shape[0])
+        b = int(Ikc2.shape[1])
+        c = int((a-1)/2)
 
         [X, Y] = np.meshgrid(np.arange(b) - np.ceil((self.N+1)/2), np.arange(a) - np.ceil((self.N+1)/2))
         R = np.sqrt(np.square(X) + np.square(Y))
@@ -202,20 +181,24 @@ class Deconvolution:
         for i in rad:
             mask = (np.greater(R, i - bin_size) & np.less(R, i + bin_size))
             Ivalues = Ikc2[mask]
-            Dvalues = Dkc2[mask]
             Iintensity[index] = np.mean(Ivalues)
-            Dintensity[index] = np.mean(Dvalues)
             index += 1
 
+        
         index2 = 0
-        Dintensity = np.zeros(65)
-        for i in range(65, 129):
-            Dintensity[index2] = Dkc2[65,i]
+        Dintensity = np.zeros(c)
+        for i in range(c, a-2):
+            Dintensity[index2] = Dkc2[c,i+1]
             index2 += 1
-
+        
         Drad = np.arange(0,index2+1)
         Drad = np.arange(0,np.max(R)+1, np.max(R)/index2)
-        
+
+        Ioutput = open('power spectrum', 'w')
+        Ioutput.write('Radius (mm^-1)\tI^2 (pA^2)\n')
+        for i in range(0, len(Iintensity)):
+            Ioutput.write(f'{rad[i]}\t{Iintensity[i]/np.amax(Iintensity)}\n')
+        Ioutput.close
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -226,14 +209,14 @@ class Deconvolution:
 
         ax.set_xlabel('k (mm$^{-1}$)')
         ax.set_ylabel('Power (A.U.)')
-        ax.set_yscale('log')
+        ax.set_yscale('log') 
         ax.set_xscale('log')
         plt.legend()
         plt.show()
         
 
 
-    #This is a recreation of Dahl's matlab file "decon2.m" for wien=0 and wien=2
+    #This calculates the current density by deconvolving J(k) from D(k)
     def decon(self):
         self.a = np.absolute(self.Dk)
         if self.wien == 0:
@@ -253,37 +236,14 @@ class Deconvolution:
         if self.wien == 0 or self.wien == -1:
             self.Jkun = self.Jk
             self.Jkcun = fft.ifftshift(self.Jkun)
-
-    #Calculates integral J, integral J2, and their ratio (intJ2/intJ)
-    def calcints(self):
-        Jcth = self.th*self.Jc
-        Jcth2 = Jcth*Jcth
-        Nsum = sum(sum(self.th))
-        thetar = self.theta*np.pi/180
-        costh = np.cos(thetar)
-        Area = np.pi*pow(self.Rsample,2)*costh
-        print(f'Sum={sum(sum(Jcth))}')
-
-        self.intJ = sum(sum(Jcth))/Nsum*Area
-        self.intJ2 = sum(sum(Jcth2))/Nsum*Area*costh
-        self.ratio = self.intJ2/self.intJ
-        print(f'{self.intJ}\t{self.intJ2}\tratio={self.ratio}')
-
-
-    #This is the order of functions that are called repeatedly by wienerFiltering for each value of eta
-    def cycle(self):
-        self.decon()    #You can also use self.decon2() here
-        self.theta = 0
-        self.calcth()
-        self.calcints()
     
 
-    #This function performs iterated Wiener Filtering according to Dahl's method
+    #This function performs iterated Wiener Filtering
     def wienerFiltering(self):
         self.wien = 0
         self.eta = 0.01
         self.scale = 0
-        self.cycle()
+        self.decon()
         self.Jkcun = self.Jkc
         self.Jcun = self.Jc
 
@@ -296,6 +256,6 @@ class Deconvolution:
         self.Jc_arr = []
         for i in range(0,len(self.scales)):
             self.scale = self.scales[i]
-            self.cycle()
+            self.decon()
             self.Jkc_arr.append(self.Jkc)
             self.Jc_arr.append(self.Jc)

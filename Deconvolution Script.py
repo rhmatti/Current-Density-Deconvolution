@@ -1,6 +1,6 @@
 #Deconvolution Script
 #Author: Richard Mattish
-#Last Updated: 12/11/22
+#Last Updated: 01/05/23
 
 #Function:  This script is used to deconvolve ion beam current data (that was
 #           obtained by rastering the beam across a Faraday cup) from the
@@ -15,21 +15,16 @@ from decon_utils import *
 dec = Deconvolution()
 
 
-# **********     ↓This is where you need to define your parameters↓     **********
+# **********     ↓ This is where you need to define your parameters ↓     **********
 
 
-#Name of data file to be imported for deconvolution
-dataFile = 'sample_data.txt'
-
-#Need to define variables for inputs to the code
+dataFile = 'sample_data.txt'        #Name of data file to be imported for deconvolution
 dec.Rsample = 9.7                   #Radius of the matrix (basically half of the width of the data matrix) in mm
 dec.spacing = 0.3                   #Physical spacing between points in the matrix in mm
 dec.R = 3.175                       #radius of aperture in mm
-dec.delta = 0.15                    #Point spacing in mm
 
 
-
-# **********     ↑This is where you need to define your parameters↑     **********
+# **********     ↑ This is where you need to define your parameters ↑     **********
 
 
 #Imports the data file as a 2D numpy array
@@ -37,9 +32,6 @@ data_matrix = np.array(processList(readFileToList(dataFile),1,0))
 
 #Centering the largest value of the data matrix in a larger matrix and filling in all empty spaces with zeros
 dec.Ic, dec.N = padnCenter(data_matrix)
-
-dec.theta = 0
-dec.th = dec.calcth()
 
 #Generates the detector function file and saves it as fileName
 fileName = 'Dk_test4.txt'
