@@ -18,7 +18,7 @@ dec = Deconvolution()
 # **********     ↓ This is where you need to define your parameters ↓     **********
 
 
-dataFile = 'sample_data.txt'        #Name of data file to be imported for deconvolution
+dataFile = 'Data_sample.txt'        #Name of data file to be imported for deconvolution
 dec.Rsample = 9.7                   #Radius of the matrix (basically half of the width of the data matrix) in mm
 dec.spacing = 0.3                   #Physical spacing between points in the matrix in mm
 dec.R = 3.175                       #radius of aperture in mm
