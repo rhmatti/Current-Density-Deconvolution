@@ -45,6 +45,6 @@ User Instructions
       * This is the physical spacing between the data points in `dataFile` in units of mm
       
       d. Variable `dec.R`:
-      * This is the radius of the detector aperture (for circular aperture detectors)
+      * This is the radius of the detector aperture (for circular aperture detectors) in units of mm
       
 3. Run the script
