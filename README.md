@@ -48,3 +48,4 @@ User Instructions
       * This is the radius of the detector aperture (for circular aperture detectors) in units of mm
       
 3. Run the script
+	> Note: The file `Deconvolution Script.py` has the variables preconfigured to run a deconvolution immediately with the included sample data and detector files
