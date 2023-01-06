@@ -1,6 +1,6 @@
 #Deconvolution Script
 #Author: Richard Mattish
-#Last Updated: 01/05/23
+#Last Updated: 01/06/23
 
 #Function:  This script is used to deconvolve ion beam current data (that was
 #           obtained by rastering the beam across a Faraday cup) from the
@@ -8,7 +8,7 @@
 #           current density.
 
 
-#Imports all of my functions and the deconvolution class I wrote
+#Imports all of my functions and my Deconvolution class
 from decon_utils import *
 
 #Creates an instance of the Deconvolution class
@@ -59,12 +59,11 @@ dec.Ikc = fft.ifftshift(dec.Ik)
 #to aid in determining an appropriate value for eta
 dec.noise2sig()
 
-#Performs Dahl's method of iterated Wiener Filtering
+#Performs iterated Wiener Filtering
 dec.wienerFiltering()
 
 
-#This recreates the 6 side-by-side plots that Dahl's Matlab script outputs
-#(the 6 Jc plots for different values of eta)
+#This creates 6 side-by-side plots of J for 6 different magnitudes of eta
 fig, axis = plt.subplots(2,3)
 
 p1 = axis[0,0].imshow(dec.Jcun.real, interpolation = 'gaussian', cmap = 'inferno')

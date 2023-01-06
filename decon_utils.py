@@ -1,6 +1,6 @@
 #decon_utils
 #Author: Richard Mattish
-#Last Updated: 01/05/23
+#Last Updated: 01/06/23
 
 #Function:  This file contains all of the relevant functions to perform a deconvolution
 
@@ -249,8 +249,7 @@ class Deconvolution:
 
 
         self.wien = 2
-        self.mu = .6305*.758     #What is this?
-        self.scales = [0.01, 0.001, 0.0001, 0.00001, 0.0004]
+        self.scales = [0.01, 0.001, 0.0002, 0.0001, 0.00001]
 
         self.Jkc_arr = []
         self.Jc_arr = []
